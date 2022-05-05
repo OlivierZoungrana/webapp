@@ -1,0 +1,54 @@
+pipeline {
+   agent any
+   stages {
+     stage('Checkout') {
+       steps {
+         git branch: 'main',
+            url: 'https://github.com/OlivierZoungrana/webapp.git'
+ }
+ }
+ stage('Build'){
+   tools{
+     maven 'maven'
+ }
+ steps{
+    sh 'mvn clean install'
+ }
+ }
+
+ stage('Build Docker Image') {
+   steps {
+      sh "docker build -t olivierzoungrana/webapp:1.0.0  /var/lib/jenkins/workspace/${JOB_NAME}"
+ }
+ }
+
+ stage('Upload To DockerHub') {
+ environment {
+DOCKERHUB_CREDENTIALS=credentials('dockerhub-cred-olivier')
+ }
+ steps {
+		        sh 'echo $DOCKERHUB_CREDENTIALS_PSW | docker login -u $DOCKERHUB_CREDENTIALS_USR --password-stdin'
+				sh 'docker tag olivierzoungrana/webapp:1.0.0 olivierhz/dockerhub:webapp'
+				sh 'docker push olivierhz/webapp:1.0.0'
+			}
+ }
+
+ stage('Deploy app container') {
+ steps {
+    sshagent(['f6d40d58-6abe-4c48-8191-905dba31dc1e']) {
+         sh " ssh vagrant@192.168.60.20 docker rm -f webapp"
+         sh "ssh vagrant@192.168.60.20 docker run -d -p 8083:8083 --name webapp olivierhz/webapp:1.0.0"
+     }
+ }
+ }
+ stage('deploy sur tomcat'){
+     steps {
+         deploy adapters: [tomcat8(credentialsId: '6b1b1839-a050-4e24-83fb-fcde8840a64b', 
+         path: '',
+         url: 'http://192.168.60.20:8084')], 
+         contextPath: null, 
+         war: '**/*.war'
+     }
+ }
+ }
+}
